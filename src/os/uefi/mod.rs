@@ -342,8 +342,9 @@ impl Os for OsEfi {
     }
 
     fn set_text_highlight(&self, highlight: bool) {
-        let attr = if highlight { 0x70 } else { 0x07 };
-        status_to_result((self.st.ConsoleOut.SetAttribute)(self.st.ConsoleOut, attr)).unwrap();
+        // E-OS theme: bright red (0x0C) on black; selection is black on red (0x40).
+        let attr = if highlight { 0x40 } else { 0x0C };
+        let _ = status_to_result((self.st.ConsoleOut.SetAttribute)(self.st.ConsoleOut, attr));
     }
 }
 
