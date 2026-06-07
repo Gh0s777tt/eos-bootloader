@@ -450,8 +450,9 @@ fn elf_entry(data: &[u8]) -> (u64, bool) {
 }
 
 fn main(os: &impl Os) -> (usize, u64, KernelArgs) {
+    os.set_text_highlight(false); // E-OS: switch to red-on-black theme before anything prints
     println!(
-        "Redox OS Bootloader {} on {}",
+        "E-OS Bootloader {} on {}",
         env!("CARGO_PKG_VERSION"),
         os.name()
     );
