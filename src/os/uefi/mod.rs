@@ -200,6 +200,13 @@ impl Os for OsEfi {
                 Err(err) => match err.errno {
                     // Ignore header not found error
                     syscall::ENOENT => (),
+                    // E-OS: an encrypted RedoxFS returns ENOKEY (no password given /
+                    // wrong password) or EKEYREJECTED. Propagate it instead of logging
+                    // it as a generic BlockIo error and skipping the device -- otherwise
+                    // the caller sees only ENOENT ("No RedoxFS partitions found") and
+                    // panics instead of prompting for the disk password, so an encrypted
+                    // root cannot boot under UEFI (both aarch64 and x86_64).
+                    syscall::ENOKEY | syscall::EKEYREJECTED => return Err(err),
                     // Print any other errors
                     _ => {
                         log::warn!("BlockIo error: {:?}", err);
