@@ -81,6 +81,15 @@ pub trait Os {
 
     fn hwdesc(&self) -> OsHwDesc;
 
+    /// Wall-clock time at boot as seconds since the Unix epoch, if the firmware
+    /// can report it (UEFI Runtime Services GetTime). Used to seed the system
+    /// clock on platforms where the kernel does not read an RTC on this boot path
+    /// (notably aarch64 ACPI boot, which otherwise starts at 1970). `None` when
+    /// unavailable — the default for non-UEFI implementations.
+    fn boot_time_epoch(&self) -> Option<u64> {
+        None
+    }
+
     fn video_outputs(&self) -> usize;
     fn video_modes(&self, output_i: usize) -> Self::V;
     fn set_video_mode(&self, output_i: usize, mode: &mut OsVideoMode);

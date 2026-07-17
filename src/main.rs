@@ -610,6 +610,15 @@ fn main(os: &impl Os) -> (usize, u64, KernelArgs) {
             writeln!(w, "REDOXFS_PASSWORD_SIZE={:016x}", password.len()).unwrap();
         }
 
+        // Seed the system clock from the firmware wall-clock (UEFI GetTime) so an
+        // aarch64 ACPI/UEFI boot doesn't start at the Unix epoch (1970), which
+        // breaks TLS certificate-validity checks. `rtcd` reads BOOT_TIME from the
+        // kernel env and applies it via /scheme/sys/update_time_offset. Returns
+        // None on non-UEFI platforms, so this is a no-op there.
+        if let Some(boot_time) = os.boot_time_epoch() {
+            writeln!(w, "BOOT_TIME={boot_time}").unwrap();
+        }
+
         #[cfg(target_arch = "riscv64")]
         {
             let boot_hartid = os::efi_get_boot_hartid()

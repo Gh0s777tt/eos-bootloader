@@ -62,6 +62,18 @@ pub(crate) fn alloc_zeroed_page_aligned(size: usize) -> *mut u8 {
     ptr
 }
 
+/// Days since 1970-01-01 for a proleptic-Gregorian Y-M-D (Howard Hinnant's
+/// `days_from_civil`; valid far beyond any RTC's range).
+fn days_from_civil(y: i64, m: i64, d: i64) -> i64 {
+    let y = if m <= 2 { y - 1 } else { y };
+    let era = (if y >= 0 { y } else { y - 399 }) / 400;
+    let yoe = y - era * 400; // [0, 399]
+    let mp = (m + 9) % 12; // Mar=0 … Feb=11
+    let doy = (153 * mp + 2) / 5 + d - 1; // [0, 365]
+    let doe = yoe * 365 + yoe / 4 - yoe / 100 + doy; // [0, 146096]
+    era * 146097 + doe - 719468
+}
+
 pub struct OsEfi {
     st: &'static SystemTable,
     outputs: RefCell<Vec<(Output, Option<EdidActive>)>>,
@@ -219,6 +231,27 @@ impl Os for OsEfi {
 
         log::warn!("No RedoxFS partitions found");
         Err(syscall::Error::new(syscall::ENOENT))
+    }
+
+    fn boot_time_epoch(&self) -> Option<u64> {
+        // Read the firmware real-time clock through UEFI Runtime Services.
+        let mut time = uefi::time::Time::default();
+        let status = unsafe { (self.st.RuntimeServices.GetTime)(&mut time, ptr::null_mut()) };
+        if status != Status::SUCCESS {
+            return None;
+        }
+        // Firmware reports broken-down UTC (TimeZone is commonly 0x07FF
+        // "unspecified", which we treat as UTC). Convert to seconds since epoch.
+        let days = days_from_civil(
+            i64::from(time.Year),
+            i64::from(time.Month),
+            i64::from(time.Day),
+        );
+        let secs = days * 86_400
+            + i64::from(time.Hour) * 3_600
+            + i64::from(time.Minute) * 60
+            + i64::from(time.Second);
+        u64::try_from(secs).ok().filter(|&s| s > 0)
     }
 
     fn hwdesc(&self) -> OsHwDesc {
