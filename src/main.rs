@@ -23,6 +23,8 @@ mod os;
 
 mod arch;
 mod editor;
+#[cfg(feature = "verify-boot")]
+mod eos_boot_verify;
 mod logger;
 mod serial_16550;
 
@@ -351,6 +353,46 @@ enum Filetype {
     Elf,
     Initfs,
 }
+
+/// Read a small file (a detached signature) inside an EXISTING transaction.
+///
+/// V2-MS02: this runs in the same `tx` as the payload read, so the signature and the bytes it
+/// covers come from one filesystem snapshot. Reading it in a second transaction would leave a
+/// window in which the payload could be swapped between the two reads.
+#[cfg_attr(not(feature = "verify-boot"), allow(dead_code))]
+fn read_small_in_tx<D: Disk>(
+    tx: &mut redoxfs::Transaction<D>,
+    path: &str,
+) -> Option<Vec<u8>> {
+    let mut node: Option<TreeData<Node>> = None;
+    for component in path.split('/') {
+        node = Some(
+            tx.find_node(
+                node.map_or(redoxfs::TreePtr::root(), |node: TreeData<Node>| node.ptr()),
+                component,
+            )
+            .ok()?,
+        );
+    }
+    let node = node?;
+    let size = node.data().size() as usize;
+    // A detached Ed25519 signature is 64 bytes. Anything wildly larger is not one; cap the read
+    // so a hostile filesystem cannot make the bootloader allocate arbitrarily.
+    if size == 0 || size > 4096 {
+        return None;
+    }
+    let mut buf = alloc::vec![0u8; size];
+    let mut i = 0;
+    while i < size {
+        match tx.read_node_inner(&node, i as u64, &mut buf[i..]) {
+            Ok(0) => break,
+            Ok(n) => i += n,
+            Err(_) => return None,
+        }
+    }
+    buf.truncate(i);
+    Some(buf)
+}
 fn load_to_memory<O: Os>(
     os: &O,
     fs: &mut redoxfs::FileSystem<O::D>,
@@ -391,6 +433,25 @@ fn load_to_memory<O: Os>(
         }
         println!("\r{}: {}/{} MiB", path, i / MIBI as u64, size / MIBI as u64);
 
+        // V2-MS02: authenticate BEFORE the magic-byte check and before any caller can act on
+        // these bytes. For the kernel that matters concretely -- `elf_entry()` reads `e_entry`
+        // straight out of this buffer and jumps to it.
+        #[cfg(feature = "verify-boot")]
+        let (role, sig_path) = match filetype {
+            Filetype::Elf => (eos_boot_verify::ROLE_KERNEL, alloc::format!("{path}.sig")),
+            Filetype::Initfs => (eos_boot_verify::ROLE_INITFS, alloc::format!("{path}.sig")),
+        };
+        #[cfg(feature = "verify-boot")]
+        match read_small_in_tx(tx, &sig_path) {
+            Some(sig) => eos_boot_verify::verify_or_panic(path, role, slice, &sig),
+            None => panic!(
+                "{}: no signature at {} -- refusing to boot unverified code (V2-MS02)",
+                path, sig_path
+            ),
+        }
+
+        // Kept as a cheap sanity check on a payload that is already authenticated: it turns a
+        // correctly-signed but wrong-role object into a clear message instead of a jump.
         if filetype == Filetype::Elf {
             let magic = &slice[..4];
             if magic != b"\x7FELF" {

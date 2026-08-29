@@ -16,6 +16,16 @@ crate-type = ["staticlib"]
 
 [dependencies]
 bitflags = "1.3.2"
+
+# E-OS V2-MS02: verify the kernel and initfs by signature instead of magic bytes.
+# Deliberately the SAME crate and version E-OS already runs on-device in pkg-lib
+# (manifest_sig.rs) and host-side in tools/eos-repo-sign -- this adds a third consumer of one
+# implementation, not a third implementation, to the trust base. `default-features = false`
+# drops std/alloc/zeroize; verification needs no RNG, so nothing pulls getrandom.
+ed25519-dalek = { version = "2.2.0", default-features = false, optional = true }
+# Comes in with ed25519-dalek anyway (Ed25519 is SHA-512 internally); taking it as a direct
+# dependency lets the signed message be a domain-separated digest at zero extra size cost.
+sha2 = { version = "0.10", default-features = false, optional = true }
 linked_list_allocator = "0.10.5"
 log = "0.4.17"
 redox_syscall = "0.9"
@@ -57,3 +67,18 @@ fdt = { git = "https://github.com/repnop/fdt.git", rev = "2fb1409edd1877c714a0aa
 default = []
 live = []
 serial_debug = []
+# E-OS V2-MS02. OFF by default so a keyless build still produces a bootable image, exactly as
+# V2-N03's Secure Boot signing degrades. The recipe turns it ON whenever the operator's boot
+# key is present, and says so on both paths -- there is no silent state. When it IS on there is
+# no runtime bypass: no branch skips verification, and a build with the flag but no usable key
+# refuses to boot rather than continuing.
+verify-boot = ["dep:ed25519-dalek", "dep:sha2"]
+
+# E-OS V2-MS02: the BIOS stage3 is padded to a hard 384 KiB in asm/x86-unknown-none/
+# bootloader.asm, and adding Ed25519 overflows it without LTO (nasm: "TIMES value is
+# negative"). LTO + one codegen unit brings the whole bootloader in well under the limit --
+# measured to shrink it below its pre-V2-MS02 size on aarch64.
+[profile.release]
+opt-level = 3
+lto = true
+codegen-units = 1

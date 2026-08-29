@@ -5,7 +5,7 @@ all: $(BUILD)/bootloader.efi
 
 $(BUILD)/bootloader.efi: $(SOURCE)/Cargo.toml $(SOURCE)/Cargo.lock $(shell find $(SOURCE)/src -type f)
 	mkdir -p "$(BUILD)"
-	env RUSTFLAGS="--cfg aes_force_soft -Zunstable-options" \
+	env RUSTFLAGS="--cfg aes_force_soft --cfg curve25519_dalek_backend=\"serial\" -Zunstable-options" \
 	cargo rustc \
 		--manifest-path="$<" \
 		$(CARGO_ARGS) \
@@ -15,7 +15,7 @@ $(BUILD)/bootloader.efi: $(SOURCE)/Cargo.toml $(SOURCE)/Cargo.lock $(shell find 
 
 $(BUILD)/bootloader-live.efi: $(SOURCE)/Cargo.toml $(SOURCE)/Cargo.lock $(shell find $(SOURCE)/src -type f)
 	mkdir -p "$(BUILD)"
-	env RUSTFLAGS="--cfg aes_force_soft -Zunstable-options" \
+	env RUSTFLAGS="--cfg aes_force_soft --cfg curve25519_dalek_backend=\"serial\" -Zunstable-options" \
 	cargo rustc \
 		--manifest-path="$<" \
 		$(CARGO_ARGS) \
