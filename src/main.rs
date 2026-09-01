@@ -360,10 +360,7 @@ enum Filetype {
 /// covers come from one filesystem snapshot. Reading it in a second transaction would leave a
 /// window in which the payload could be swapped between the two reads.
 #[cfg_attr(not(feature = "verify-boot"), allow(dead_code))]
-fn read_small_in_tx<D: Disk>(
-    tx: &mut redoxfs::Transaction<D>,
-    path: &str,
-) -> Option<Vec<u8>> {
+fn read_small_in_tx<D: Disk>(tx: &mut redoxfs::Transaction<D>, path: &str) -> Option<Vec<u8>> {
     let mut node: Option<TreeData<Node>> = None;
     for component in path.split('/') {
         node = Some(
