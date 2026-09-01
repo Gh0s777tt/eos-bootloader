@@ -66,7 +66,10 @@ pub fn verify_or_panic(what: &str, role: &[u8; 16], data: &[u8], sig: &[u8]) {
 
     let key = match VerifyingKey::from_bytes(&EOS_BOOT_VERIFY_PUB) {
         Ok(key) => key,
-        Err(err) => panic!("{}: embedded boot-verification key is not a valid Ed25519 key: {err}", what),
+        Err(err) => panic!(
+            "{}: embedded boot-verification key is not a valid Ed25519 key: {err}",
+            what
+        ),
     };
 
     let mut hasher = Sha512::new();
