@@ -12,7 +12,13 @@ db 1 ; Version
 db 0 ; Unused
 times 32 db ' ' ; System identifier
 .volume_id: ; Volume identifier
-db 'Redox OS'
+; E-OS: the name a person sees when they plug this stick in -- in a file manager, in
+; `lsblk`, and in the firmware's boot menu. R-611a renamed the FILE; this is the same
+; lie one level deeper, and it is the level the user actually meets.
+; Write-only field: nothing in this bootloader, and nothing in the E-OS tree, reads or
+; compares it (checked). The padding below keeps the field at its required 32 bytes
+; whatever the name's length.
+db 'E-OS'
 times 32-($-.volume_id) db ' '
 times 8 db 0 ; Unused
 db 0x15, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x15 ; Volume space size (0x15)
